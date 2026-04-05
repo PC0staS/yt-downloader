@@ -62,11 +62,34 @@ jobs:
                   sudo apt-get update
                   sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
 
-            - name: Compress macOS app
+            - name: Build frontend
+              run: bun install && bun run build
+              working-directory: frontend
+
+            - name: Build application (Linux)
+              if: runner.os == 'Linux'
+              run: wails build -platform linux/${{ matrix.goarch }}
+
+            - name: Build application (Windows)
+              if: runner.os == 'Windows'
+              run: wails build -platform windows/amd64
+
+            - name: Build application (macOS)
               if: runner.os == 'macOS'
+              run: wails build -platform darwin/${{ matrix.goarch }}
+
+            - name: Compress macOS app (arm64)
+              if: runner.os == 'macOS' && matrix.goarch == 'arm64'
               run: |
                   cd build/bin
                   zip -r youtube-downloader-arm64.zip youtube-downloader.app
+                  cd ../..
+
+            - name: Compress macOS app (amd64)
+              if: runner.os == 'macOS' && matrix.goarch == 'amd64'
+              run: |
+                  cd build/bin
+                  zip -r youtube-downloader-amd64.zip youtube-downloader.app
                   cd ../..
 
             - name: Upload artifact
@@ -75,8 +98,9 @@ jobs:
                   name: ${{ matrix.goos }}-${{ matrix.goarch }}
                   path: |
                       build/bin/youtube-downloader
+                      build/bin/youtube-downloader-*
                       build/bin/youtube-downloader.exe
-                      build/bin/youtube-downloader.zip
+                      build/bin/*.zip
     release:
         needs: build
         runs-on: ubuntu-latest
@@ -92,5 +116,5 @@ jobs:
                       windows-amd64/youtube-downloader.exe
                       linux-amd64/youtube-downloader
                       linux-arm64/youtube-downloader-arm64
-                      macos-arm64/youtube-downloader-arm64
-                      darwin-amd64/youtube-downloader-amd64
+                      darwin-arm64/youtube-downloader-arm64.zip
+                      darwin-amd64/youtube-downloader-amd64.zip
