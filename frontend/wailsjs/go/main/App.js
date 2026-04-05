@@ -10,6 +10,10 @@ export function GetJobs() {
   return window['go']['main']['App']['GetJobs']();
 }
 
+export function SaveDownloadedFile(arg1, arg2) {
+  return window['go']['main']['App']['SaveDownloadedFile'](arg1, arg2);
+}
+
 export function YoutubeDownload(arg1) {
   return window['go']['main']['App']['YoutubeDownload'](arg1);
 }

@@ -22,6 +22,7 @@ export namespace main {
 	    success: boolean;
 	    message: string;
 	    filename?: string;
+	    tempPath?: string;
 	    error?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -33,6 +34,7 @@ export namespace main {
 	        this.success = source["success"];
 	        this.message = source["message"];
 	        this.filename = source["filename"];
+	        this.tempPath = source["tempPath"];
 	        this.error = source["error"];
 	    }
 	}
