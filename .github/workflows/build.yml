@@ -73,9 +73,7 @@ jobs:
             - name: Build application (Linux ARM64)
               if: runner.os == 'Linux' && matrix.goarch == 'arm64'
               env:
-                  CC: aarch64-linux-gnu-gcc
-                  CXX: aarch64-linux-gnu-g++
-                  CGO_ENABLED: "1"
+                  CGO_ENABLED: "0"
               run: wails build -platform linux/${{ matrix.goarch }} -tags webkit2_41
 
             - name: Build application (Windows)
