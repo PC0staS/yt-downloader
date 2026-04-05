@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"os/exec"
 	"path/filepath"
 	osruntime "runtime"
 	"sync"
@@ -76,12 +75,12 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 	// Ensure yt-dlp is installed
 	ytdlp.MustInstall(ctxBackground, nil)
 
-	// Get download directory
+	// Get and validate download directory
 	downloadDir := request.DownloadPath
 	if downloadDir == "" {
 		// Try to use current working directory first
 		cwd, err := os.Getwd()
-		if err == nil {
+		if err == nil && isWritableDirectory(cwd) {
 			downloadDir = cwd
 		} else {
 			// Fallback to Downloads folder
@@ -100,9 +99,9 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 		}
 	}
 
-	// Ensure directory exists - with fallback if write-protected
+	// Ensure directory exists and is writable
 	if err := os.MkdirAll(downloadDir, 0755); err != nil {
-		// If the directory is read-only, try Downloads as fallback
+		// If the directory creation fails, try Downloads as fallback
 		homeDir, homeErr := os.UserHomeDir()
 		if homeErr != nil {
 			job.Status = "error"
@@ -114,6 +113,37 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 				Error:   job.Error,
 			}
 		}
+		
+		downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
+		if err := os.MkdirAll(downloadDir, 0755); err != nil {
+			job.Status = "error"
+			job.Error = fmt.Sprintf("Failed to create downloads directory: %v", err)
+			a.jobs.Store(jobID, job)
+			runtime.EventsEmit(a.ctx, "job:update", job)
+			return DownloadResponse{
+				Success: false,
+				Error:   job.Error,
+			}
+		}
+	}
+	
+	// Verify the directory is actually writable by testing
+	if !isWritableDirectory(downloadDir) {
+		// Last resort: use temp directory
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
+		} else {
+			job.Status = "error"
+			job.Error = "No writable directory found for downloads"
+			a.jobs.Store(jobID, job)
+			runtime.EventsEmit(a.ctx, "job:update", job)
+			return DownloadResponse{
+				Success: false,
+				Error:   job.Error,
+			}
+		}
+	}
 		
 		downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
 		if err := os.MkdirAll(downloadDir, 0755); err != nil {
@@ -159,22 +189,10 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 	format := mapFormat(request.AudioOnly, request.Quality)
 	outputTemplate := filepath.Join(downloadDir, "%(title)s.%(ext)s")
 
-	// Detectar y configurar runtimes disponibles
 	cmd := ytdlp.New().
 		Format(format).
 		Output(outputTemplate)
 	
-	// Agregar runtimes disponibles
-	availableRuntimes := findAvailableRuntimes()
-	for _, runtime := range availableRuntimes {
-		cmd = cmd.JsRuntimes(runtime)
-	}
-	
-	// Si no hay runtimes, intentar con los nombre estándar como fallback
-	if len(availableRuntimes) == 0 {
-		cmd = cmd.JsRuntimes("bun").JsRuntimes("node")
-	}
-
 	if request.AudioOnly {
 		cmd = cmd.ExtractAudio().AudioFormat("wav").AudioQuality("192")
 	}
@@ -324,56 +342,20 @@ func mapFormat(audioOnly bool, quality string) string {
 	}
 }
 
-// findAvailableRuntimes detecta qué runtimes JS están disponibles en el sistema
-func findAvailableRuntimes() []string {
-	var runtimes []string
-	
-	// Lugares comunes donde buscar runtimes según SO
-	var searchPaths []string
-	if osruntime.GOOS == "darwin" {
-		searchPaths = []string{
-			"/opt/homebrew/bin/node",
-			"/usr/local/bin/node",
-			"/opt/homebrew/bin/bun",
-			"/Users/*/.bun/bin/bun", // Bun típicamente está en ~/.bun/bin
-			"/opt/homebrew/bin/deno",
-			"/usr/local/bin/deno",
-		}
-	} else if osruntime.GOOS == "windows" {
-		searchPaths = []string{
-			"C:\\Program Files\\nodejs\\node.exe",
-			"C:\\Program Files (x86)\\nodejs\\node.exe",
-			"C:\\Users\\*\\AppData\\Local\\bun\\bun.exe",
-			"C:\\ProgramData\\chocolatey\\bin\\node.exe",
-		}
-	} else { // Linux
-		searchPaths = []string{
-			"/usr/bin/node",
-			"/usr/local/bin/node",
-			"/usr/bin/bun",
-			"/usr/local/bin/bun",
-			"/usr/bin/deno",
-			"/usr/local/bin/deno",
-		}
+// isWritableDirectory verifica si un directorio es realmente escribible
+func isWritableDirectory(path string) bool {
+	// Crear directorio si no existe
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return false
 	}
 	
-	// Buscar cada runtime
-	for _, path := range searchPaths {
-		if _, err := os.Stat(path); err == nil {
-			// Archivo existe, extraer nombre del runtime
-			filename := filepath.Base(path)
-			runtimes = append(runtimes, filename)
-		}
-	}
+	// Prueba de escritura: crear un archivo temporal
+	testFile := filepath.Join(path, ".write-test-"+fmt.Sprintf("%d", time.Now().UnixNano()))
+	err := os.WriteFile(testFile, []byte("test"), 0644)
+	defer func() {
+		// Limpiar el archivo de prueba
+		os.Remove(testFile)
+	}()
 	
-	// Si no se encontraron, intentar buscar en PATH
-	if len(runtimes) == 0 {
-		for _, name := range []string{"node", "bun", "deno", "python3", "python"} {
-			if _, err := exec.LookPath(name); err == nil {
-				runtimes = append(runtimes, name)
-			}
-		}
-	}
-	
-	return runtimes
+	return err == nil
 }
