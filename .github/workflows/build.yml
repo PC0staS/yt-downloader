@@ -1,0 +1,96 @@
+name: Build
+
+on:
+    push:
+        tags:
+            - "v*"
+
+permissions:
+    contents: write
+
+jobs:
+    build:
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                include:
+                    - os: ubuntu-latest
+                      goos: linux
+                      goarch: amd64
+                      output: youtube-downloader
+                    - os: ubuntu-latest
+                      goos: linux
+                      goarch: arm64
+                      output: youtube-downloader-arm64
+                    - os: windows-latest
+                      goos: windows
+                      goarch: amd64
+                      output: youtube-downloader.exe
+                    - os: macos-latest
+                      goos: darwin
+                      goarch: arm64
+                      output: youtube-downloader-arm64
+                    - os: macos-13
+                      goos: darwin
+                      goarch: amd64
+                      output: youtube-downloader-amd64
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Go
+              uses: actions/setup-go@v4
+              with:
+                  go-version: "1.21"
+
+            - name: Set up Bun
+              uses: oven-sh/setup-bun@v1
+              with:
+                  bun-version: latest
+
+            - name: Install Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "18"
+
+            - name: Install Wails
+              run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.8.1
+
+            - name: Install Linux dependencies
+              if: runner.os == 'Linux'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+            - name: Compress macOS app
+              if: runner.os == 'macOS'
+              run: |
+                  cd build/bin
+                  zip -r youtube-downloader-arm64.zip youtube-downloader.app
+                  cd ../..
+
+            - name: Upload artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ matrix.goos }}-${{ matrix.goarch }}
+                  path: |
+                      build/bin/youtube-downloader
+                      build/bin/youtube-downloader.exe
+                      build/bin/youtube-downloader.zip
+    release:
+        needs: build
+        runs-on: ubuntu-latest
+        if: startsWith(github.ref, 'refs/tags/')
+
+        steps:
+            - uses: actions/download-artifact@v4
+
+            - name: Create Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  files: |
+                      windows-amd64/youtube-downloader.exe
+                      linux-amd64/youtube-downloader
+                      linux-arm64/youtube-downloader-arm64
+                      macos-arm64/youtube-downloader-arm64
+                      darwin-amd64/youtube-downloader-amd64
