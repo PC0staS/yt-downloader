@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	osruntime "runtime"
 	"sync"
 	"time"
 
@@ -133,6 +134,21 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 	a.jobs.Store(jobID, job)
 	runtime.EventsEmit(a.ctx, "job:update", job)
 
+	// Set PATH to include common tool locations
+	currentPath := os.Getenv("PATH")
+	var pathAdditions string
+	if osruntime.GOOS == "darwin" {
+		// macOS - add homebrew paths
+		pathAdditions = "/opt/homebrew/bin:/usr/local/bin:" + currentPath
+	} else if osruntime.GOOS == "windows" {
+		// Windows - add Program Files and Chocolatey paths
+		pathAdditions = currentPath + ";C:\\Program Files\\ffmpeg\\bin;C:\\ProgramData\\chocolatey\\bin"
+	} else {
+		// Linux and others
+		pathAdditions = "/usr/local/bin:/usr/bin:" + currentPath
+	}
+	os.Setenv("PATH", pathAdditions)
+	
 	// Set temp directory for yt-dlp to avoid macOS translocation issues
 	homeDir, _ := os.UserHomeDir()
 	tmpDir := filepath.Join(homeDir, ".cache", "youtube-downloader", "tmp")
@@ -146,8 +162,7 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 		Format(format).
 		Output(outputTemplate).
 		JsRuntimes("bun").
-		JsRuntimes("node").
-		JsRuntimes("deno")
+		JsRuntimes("node")
 
 	if request.AudioOnly {
 		cmd = cmd.ExtractAudio().AudioFormat("wav").AudioQuality("192")
