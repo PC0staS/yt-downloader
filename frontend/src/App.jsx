@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
-import { YoutubeDownload, SaveDownloadedFile } from "../wailsjs/go/main/App";
+import {
+  YoutubeDownload,
+  SaveDownloadedFile,
+  ShowSaveFileDialog,
+} from "../wailsjs/go/main/App";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 import { BrowserOpenURL } from "../wailsjs/runtime/runtime";
-import { SaveFileDialog } from "../wailsjs/runtime/runtime";
 
 export default function App() {
   const [url, setUrl] = useState("");
@@ -30,17 +33,22 @@ export default function App() {
   useEffect(() => {
     if (!job) return;
 
+    console.log("Job updated:", job);
+
     if (job.status === "completed") {
+      console.log("Job completed! tempPath:", job.tempPath);
       setLoading(false);
       // Guardar el archivo temporal descargado para después permitir guardarlo
       setDownloadedFile(job.tempPath);
       setStatus("save-location"); // Nuevo estado para solicitar ubicación de guardado
       setError(null);
     } else if (job.status === "error") {
+      console.log("Job error:", job.error);
       setLoading(false);
       setStatus("error");
       setError(job.error);
     } else if (job.status === "downloading") {
+      console.log("Job downloading...");
       setLoading(true);
     }
   }, [job]);
@@ -70,15 +78,11 @@ export default function App() {
         downloadPath: downloadPath,
       });
 
-      if (response.success) {
-        setStatus("success");
-        setUrl("");
-        setAudioOnly(false);
-        setQuality("best");
-      } else {
+      if (!response.success) {
         setError(response.error || "Download failed");
         setStatus("error");
       }
+      // If success, don't set any status - let the job event handler set it to "save-location"
     } catch (err) {
       setError(err.message || "An unexpected error occurred");
       setStatus("error");
@@ -100,26 +104,46 @@ export default function App() {
   };
 
   const handleSaveFile = async () => {
-    if (!downloadedFile) return;
+    console.log("=== handleSaveFile called ===");
+    console.log("downloadedFile:", downloadedFile);
+    console.log("status:", status);
+
+    if (!downloadedFile) {
+      console.error("No downloaded file available");
+      setError("No downloaded file available");
+      return;
+    }
 
     try {
-      // Usar SaveFileDialog para que el usuario elija dónde guardar
       const filename = downloadedFile.split("/").pop();
-      const savePath = await SaveFileDialog({
-        defaultFilename: filename,
-        title: "Save downloaded video",
-        filters: [{ displayName: "All Files", pattern: "*" }],
-      });
+      console.log("Opening save dialog for filename:", filename);
+      console.log("From path:", downloadedFile);
 
-      if (!savePath) {
-        // Usuario canceló
+      console.log("ShowSaveFileDialog typeof:", typeof ShowSaveFileDialog);
+      if (typeof ShowSaveFileDialog !== "function") {
+        console.error("ShowSaveFileDialog is not a function!");
+        setError("ShowSaveFileDialog is not available (not a function)");
         return;
       }
 
-      // Llamar Go para mover el archivo
-      const result = await SaveDownloadedFile(downloadedFile, savePath);
+      console.log("Calling ShowSaveFileDialog...");
+      const savePath = await ShowSaveFileDialog(filename);
+      console.log("ShowSaveFileDialog returned:", savePath);
 
-      if (result.success) {
+      if (!savePath) {
+        console.log("Save dialog cancelled by user (empty path)");
+        return;
+      }
+
+      console.log("Calling SaveDownloadedFile...");
+      console.log("  From:", downloadedFile);
+      console.log("  To:", savePath);
+
+      const result = await SaveDownloadedFile(downloadedFile, savePath);
+      console.log("SaveDownloadedFile result:", result);
+
+      if (result && result.success) {
+        console.log("File saved successfully!");
         setStatus("success");
         setError(null);
         setDownloadedFile(null);
@@ -127,11 +151,17 @@ export default function App() {
         setAudioOnly(false);
         setQuality("best");
       } else {
-        setError(result.error || "Failed to save file");
+        const errorMsg = result?.error || "Failed to save file";
+        console.error("Save failed:", errorMsg);
+        setError(errorMsg);
         setStatus("error");
       }
     } catch (err) {
-      setError(err.message || "Failed to save file");
+      console.error("Exception in handleSaveFile:", err);
+      console.error("Error name:", err.name);
+      console.error("Error message:", err.message);
+      console.error("Error stack:", err.stack);
+      setError(`Error: ${err.message || err}`);
       setStatus("error");
     }
   };
@@ -349,19 +379,26 @@ export default function App() {
               )}
 
               {status === "save-location" && (
-                <div className="mb-6 rounded-xl border border-[#4a5f7f] bg-[#1a2332] p-4">
-                  <p className="mb-4 text-sm text-[#a8c5e0]">
-                    <span className="font-medium">
-                      Video downloaded to temporary location.
-                    </span>
-                  </p>
-                  <button
-                    onClick={handleSaveFile}
-                    className="w-full rounded-lg bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] px-6 py-2 text-sm font-medium text-white transition-all hover:shadow-lg hover:from-[#4f46e5] hover:to-[#7c3aed] active:scale-95"
-                  >
-                    Choose Save Location
-                  </button>
-                </div>
+                <>
+                  {console.log(
+                    "Rendering save location button with downloadedFile:",
+                    downloadedFile,
+                  )}
+                  <div className="mb-6 rounded-xl border border-[#4a5f7f] bg-[#1a2332] p-4">
+                    <p className="mb-4 text-sm text-[#a8c5e0]">
+                      <span className="font-medium">
+                        Video downloaded to temporary location.
+                      </span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleSaveFile}
+                      className="w-full rounded-lg bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] px-6 py-2 text-sm font-medium text-white transition-all hover:shadow-lg hover:from-[#4f46e5] hover:to-[#7c3aed] active:scale-95"
+                    >
+                      Choose Save Location
+                    </button>
+                  </div>
+                </>
               )}
 
               {status === "success" && (

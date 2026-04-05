@@ -8,4 +8,6 @@ export function GetJobs():Promise<Array<main.Job>>;
 
 export function SaveDownloadedFile(arg1:string,arg2:string):Promise<main.DownloadResponse>;
 
+export function ShowSaveFileDialog(arg1:string):Promise<string>;
+
 export function YoutubeDownload(arg1:main.DownloadRequest):Promise<main.DownloadResponse>;

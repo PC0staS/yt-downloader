@@ -48,6 +48,7 @@ type Job struct {
 	Progress  int       `json:"progress"`
 	Message   string    `json:"message"`
 	Error     string    `json:"error,omitempty"`
+	TempPath  string    `json:"tempPath,omitempty"` // Path to the downloaded file
 	StartTime time.Time `json:"startTime"`
 	EndTime   time.Time `json:"endTime,omitempty"`
 }
@@ -223,6 +224,7 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 			job.Progress = 100
 			job.Message = "Download complete!"
 			job.EndTime = time.Now()
+			// Set the temporary file path (will be populated after finding the file)
 			a.jobs.Store(jobID, job)
 			runtime.EventsEmit(a.ctx, "job:update", job)
 
@@ -233,19 +235,56 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 
 			fmt.Printf("Total time: %v\n", job.EndTime.Sub(downloadStartTime))
 			
-			// Get the downloaded file name
+			// Wait a bit to ensure file is fully written
+			time.Sleep(500 * time.Millisecond)
+			
+			// Get the downloaded file name - search more carefully
 			files, err := os.ReadDir(downloadDir)
 			var filename string
+			var tempFilePath string
+			
 			if err == nil && len(files) > 0 {
-				filename = files[0].Name()
+				// Find the most recently created file (likely the one just downloaded)
+				var latestFile os.FileInfo
+				var latestTime time.Time
+				
+				for _, file := range files {
+					if !file.IsDir() {
+						info, _ := file.Info()
+						modTime := info.ModTime()
+						if modTime.After(latestTime) {
+							latestTime = modTime
+							latestFile = info
+						}
+					}
+				}
+				
+				if latestFile != nil {
+					filename = latestFile.Name()
+					tempFilePath = filepath.Join(downloadDir, filename)
+					
+					// Verify file exists and has content
+					if stat, err := os.Stat(tempFilePath); err == nil && stat.Size() > 0 {
+						fmt.Printf("Download file found: %s (size: %d bytes)\n", filename, stat.Size())
+						// Update job with tempPath and emit again
+						job.TempPath = tempFilePath
+						a.jobs.Store(jobID, job)
+						runtime.EventsEmit(a.ctx, "job:update", job)
+						return DownloadResponse{
+							Success:  true,
+							Message:  message,
+							Filename: filename,
+							TempPath: tempFilePath,
+						}
+					}
+				}
 			}
 			
-			tempFilePath := filepath.Join(downloadDir, filename)
+			// File not found
+			fmt.Printf("Downloaded file not found in: %s\n", downloadDir)
 			return DownloadResponse{
-				Success:  true,
-				Message:  message,
-				Filename: filename,
-				TempPath: tempFilePath,
+				Success: false,
+				Error:   "Downloaded file not found",
 			}
 		}
 	}
@@ -328,6 +367,46 @@ func (a *App) ClearJobs() {
 		}
 		return true
 	})
+}
+
+// ShowSaveFileDialog abre un diálogo de guardado de archivos
+func (a *App) ShowSaveFileDialog(filename string) (string, error) {
+	// Get default save location (Downloads folder or home directory)
+	homeDir, err := os.UserHomeDir()
+	defaultDir := homeDir
+	if err != nil {
+		defaultDir = os.TempDir()
+	} else {
+		// Try to use Downloads if it exists
+		downloadsDir := filepath.Join(homeDir, "Downloads")
+		if info, err := os.Stat(downloadsDir); err == nil && info.IsDir() {
+			defaultDir = downloadsDir
+		}
+	}
+	
+	options := runtime.SaveDialogOptions{
+		DefaultFilename:  filename,
+		Title:            "Save downloaded video",
+		DefaultDirectory: defaultDir,
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "Video files",
+				Pattern:     "*.mp4;*.mkv;*.webm;*.avi;*.mov;*.flv;*.wav",
+			},
+			{
+				DisplayName: "All Files",
+				Pattern:     "*.*",
+			},
+		},
+	}
+	
+	path, err := runtime.SaveFileDialog(a.ctx, options)
+	if err != nil {
+		fmt.Printf("ShowSaveFileDialog error: %v\n", err)
+		return "", err
+	}
+	fmt.Printf("ShowSaveFileDialog returned: %s\n", path)
+	return path, nil
 }
 
 func mapFormat(audioOnly bool, quality string) string {

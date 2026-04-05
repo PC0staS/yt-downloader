@@ -14,6 +14,10 @@ export function SaveDownloadedFile(arg1, arg2) {
   return window['go']['main']['App']['SaveDownloadedFile'](arg1, arg2);
 }
 
+export function ShowSaveFileDialog(arg1) {
+  return window['go']['main']['App']['ShowSaveFileDialog'](arg1);
+}
+
 export function YoutubeDownload(arg1) {
   return window['go']['main']['App']['YoutubeDownload'](arg1);
 }

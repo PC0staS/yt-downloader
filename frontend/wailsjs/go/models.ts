@@ -46,6 +46,7 @@ export namespace main {
 	    progress: number;
 	    message: string;
 	    error?: string;
+	    tempPath?: string;
 	    // Go type: time
 	    startTime: any;
 	    // Go type: time
@@ -64,6 +65,7 @@ export namespace main {
 	        this.progress = source["progress"];
 	        this.message = source["message"];
 	        this.error = source["error"];
+	        this.tempPath = source["tempPath"];
 	        this.startTime = this.convertValues(source["startTime"], null);
 	        this.endTime = this.convertValues(source["endTime"], null);
 	    }
