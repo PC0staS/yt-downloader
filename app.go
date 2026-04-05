@@ -154,19 +154,8 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 	}
 	
 	fmt.Printf("Final download directory: %s\n", downloadDir)
-		
-		downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
-		if err := os.MkdirAll(downloadDir, 0755); err != nil {
-			job.Status = "error"
-			job.Error = fmt.Sprintf("Failed to create downloads directory: %v", err)
-			a.jobs.Store(jobID, job)
-			runtime.EventsEmit(a.ctx, "job:update", job)
-			return DownloadResponse{
-				Success: false,
-				Error:   job.Error,
-			}
-		}
-	}
+
+	// Actualizar status a downloading
 
 	// Actualizar status a downloading
 	job.Status = "downloading"
@@ -308,6 +297,7 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 		}
 	}
 }
+
 
 // GetJobs retorna todos los jobs
 func (a *App) GetJobs() []Job {
