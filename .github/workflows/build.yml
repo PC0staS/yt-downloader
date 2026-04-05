@@ -54,7 +54,7 @@ jobs:
                   node-version: "18"
 
             - name: Install Wails
-              run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.8.1
+              run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
             - name: Install Linux dependencies
               if: runner.os == 'Linux'
