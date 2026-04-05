@@ -1,1 +1,66 @@
-@import "tailwindcss"
+@import "tailwindcss";
+
+:root {
+  --bg: #0b0f14;
+  --bg-soft: #101720;
+  --panel: #131b26;
+  --panel-2: #182433;
+  --border: #243446;
+  --text: #e8edf5;
+  --muted: #93a4bb;
+  --accent: #27c2b7;
+  --accent-strong: #1ea59b;
+  --warn: #f4b45f;
+  --danger-bg: #311a1d;
+  --danger-bd: #5d2a31;
+  --danger-tx: #ffb4bf;
+  --ok-bg: #162a24;
+  --ok-bd: #2e5d4d;
+  --ok-tx: #89e2be;
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #app {
+    height: 100%;
+    width: 100%;
+  }
+
+  body {
+    overflow: hidden;
+    background:
+      radial-gradient(
+        1200px 700px at 90% -10%,
+        rgba(39, 194, 183, 0.12),
+        transparent 45%
+      ),
+      radial-gradient(
+        900px 600px at 0% 100%,
+        rgba(244, 180, 95, 0.08),
+        transparent 40%
+      ),
+      #0b0f14;
+    color: #e8edf5;
+    font-family: "Avenir Next", "Segoe UI", "Noto Sans", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
