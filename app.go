@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	osruntime "runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -75,15 +76,18 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 	// Ensure yt-dlp is installed
 	ytdlp.MustInstall(ctxBackground, nil)
 
-	// Get and validate download directory
+	// Get and validate download directory with strict checks
 	downloadDir := request.DownloadPath
 	if downloadDir == "" {
 		// Try to use current working directory first
 		cwd, err := os.Getwd()
-		if err == nil && isWritableDirectory(cwd) {
+		
+		// Validar que cwd sea seguro y escribible
+		if err == nil && cwd != "/" && cwd != "" && !isSuspiciousPath(cwd) && isWritableDirectory(cwd) {
 			downloadDir = cwd
+			fmt.Printf("Using cwd as download directory: %s\n", downloadDir)
 		} else {
-			// Fallback to Downloads folder
+			// Fallback to Downloads folder - ALWAYS safe fallback
 			homeDir, err := os.UserHomeDir()
 			if err != nil {
 				job.Status = "error"
@@ -96,16 +100,18 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 				}
 			}
 			downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
+			fmt.Printf("Using Downloads fallback: %s\n", downloadDir)
 		}
 	}
 
-	// Ensure directory exists and is writable
+	// Ensure directory exists and is writable - with multiple validation layers
 	if err := os.MkdirAll(downloadDir, 0755); err != nil {
+		fmt.Printf("Failed to create %s: %v, trying fallback\n", downloadDir, err)
 		// If the directory creation fails, try Downloads as fallback
 		homeDir, homeErr := os.UserHomeDir()
 		if homeErr != nil {
 			job.Status = "error"
-			job.Error = fmt.Sprintf("Failed to create downloads directory: %v", err)
+			job.Error = fmt.Sprintf("Failed to determine home directory: %v", homeErr)
 			a.jobs.Store(jobID, job)
 			runtime.EventsEmit(a.ctx, "job:update", job)
 			return DownloadResponse{
@@ -127,23 +133,27 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 		}
 	}
 	
-	// Verify the directory is actually writable by testing
+	// CRITICAL: Verify the directory is NOT "/" and is actually writable before proceeding
+	if downloadDir == "/" || isSuspiciousPath(downloadDir) {
+		homeDir, _ := os.UserHomeDir()
+		downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
+		os.MkdirAll(downloadDir, 0755)
+		fmt.Printf("Suspicious path detected, using safe fallback: %s\n", downloadDir)
+	}
+	
+	// Final writable check - do not proceed if not writable
 	if !isWritableDirectory(downloadDir) {
-		// Last resort: use temp directory
-		homeDir, err := os.UserHomeDir()
-		if err == nil {
-			downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
-		} else {
-			job.Status = "error"
-			job.Error = "No writable directory found for downloads"
-			a.jobs.Store(jobID, job)
-			runtime.EventsEmit(a.ctx, "job:update", job)
-			return DownloadResponse{
-				Success: false,
-				Error:   job.Error,
-			}
+		job.Status = "error"
+		job.Error = fmt.Sprintf("Download directory is not writable: %s", downloadDir)
+		a.jobs.Store(jobID, job)
+		runtime.EventsEmit(a.ctx, "job:update", job)
+		return DownloadResponse{
+			Success: false,
+			Error:   job.Error,
 		}
 	}
+	
+	fmt.Printf("Final download directory: %s\n", downloadDir)
 		
 		downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
 		if err := os.MkdirAll(downloadDir, 0755); err != nil {
@@ -340,6 +350,25 @@ func mapFormat(audioOnly bool, quality string) string {
 		// Best: intenta MP4 primero, luego cualquier formato
 		return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
 	}
+}
+
+// isSuspiciousPath detecta si un path es potencialmente peligroso
+func isSuspiciousPath(path string) bool {
+	// Check for system directories
+	suspiciousPaths := []string{"/", "/var", "/tmp", "/etc", "/sys", "/proc", "/dev", "/root", "/bin", "/sbin", "/usr"}
+	
+	for _, susPath := range suspiciousPaths {
+		if path == susPath {
+			return true
+		}
+	}
+	
+	// Check if path is AppTranslocation (macOS sandbox)
+	if osruntime.GOOS == "darwin" && (strings.Contains(path, "AppTranslocation") || strings.Contains(path, "private/var")) {
+		return true
+	}
+	
+	return false
 }
 
 // isWritableDirectory verifica si un directorio es realmente escribible
