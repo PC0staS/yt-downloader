@@ -124,7 +124,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            windows-amd64/youtube-downloader.exe
-            linux-amd64/youtube-downloader
-            darwin-arm64/youtube-downloader-arm64.zip
-            darwin-amd64/youtube-downloader-amd64.zip
+            windows-amd64/youtube-downloader-windows.exe
+            linux-amd64/youtube-downloader-linux
+            darwin-arm64/youtube-downloader-darwin-arm64.zip
+            darwin-amd64/youtube-downloader-darwin-amd64.zip
