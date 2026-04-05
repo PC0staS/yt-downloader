@@ -115,6 +115,12 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 	a.jobs.Store(jobID, job)
 	runtime.EventsEmit(a.ctx, "job:update", job)
 
+	// Set temp directory for yt-dlp to avoid macOS translocation issues
+	homeDir, _ := os.UserHomeDir()
+	tmpDir := filepath.Join(homeDir, ".cache", "youtube-downloader", "tmp")
+	os.MkdirAll(tmpDir, 0755)
+	os.Setenv("TMPDIR", tmpDir)
+
 	format := mapFormat(request.AudioOnly, request.Quality)
 	outputTemplate := filepath.Join(downloadDir, "%(title)s.%(ext)s")
 
