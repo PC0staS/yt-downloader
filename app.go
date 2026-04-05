@@ -124,9 +124,8 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 
 	if request.AudioOnly {
 		cmd = cmd.ExtractAudio().AudioFormat("mp3").AudioQuality("192")
-	} else {
-		cmd = cmd.RecodeVideo("mp4")
 	}
+	// Ya no re-codificamos porque ahora el formato prioriza MP4 nativo
 
 	// Ejecutar en goroutine para permitir progreso en paralelo
 	downloadErr := make(chan error, 1)
@@ -136,38 +135,62 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 	}()
 
 	// Simular progreso mientras descarga
-	ticker := time.NewTicker(300 * time.Millisecond)
+	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
-	progressStage := 0
 	messages := []string{
 		"Downloading video...",
 		"Fetching metadata...",
-		"Processing video...",
+		"Encoding to MP4...",
 		"Almost done...",
 	}
+	lastEventTime := time.Now()
+	downloadStartTime := time.Now()
 
 	for {
 		select {
 		case <-ticker.C:
-			// Aumentar progreso gradualmente hasta 90%
-			if job.Progress < 90 {
-				job.Progress += 3 + rand.Intn(8)
-				if job.Progress > 90 {
-					job.Progress = 90
+			// Fase 1: Descarga (0-40% en ~5 segundos)
+			if job.Progress < 40 {
+				job.Progress += 5 + rand.Intn(4)
+				if job.Progress > 40 {
+					job.Progress = 40
 				}
-				progressStage = (job.Progress / 23)
-				job.Message = messages[progressStage]
+				job.Message = messages[0] // "Downloading video..."
 				a.jobs.Store(jobID, job)
-				fmt.Printf("Progress: %d%% - %s\n", job.Progress, job.Message)
+				runtime.EventsEmit(a.ctx, "job:update", job)
+			} else if job.Progress < 60 {
+				// Fase 2: Post-procesamiento (40-60%)
+				job.Progress += 1 + rand.Intn(2)
+				if job.Progress > 60 {
+					job.Progress = 60
+				}
+				job.Message = messages[1] // "Fetching metadata..."
+				a.jobs.Store(jobID, job)
+				runtime.EventsEmit(a.ctx, "job:update", job)
+			} else if job.Progress < 95 {
+				// Fase 3: Codificación MP4 (60-95%) - LENTA porque es CPU bound
+				job.Progress += rand.Intn(2)
+				if job.Progress > 95 {
+					job.Progress = 95
+				}
+				job.Message = messages[2] // "Encoding to MP4..."
+				a.jobs.Store(jobID, job)
 				runtime.EventsEmit(a.ctx, "job:update", job)
 			} else if job.Progress < 99 {
-				// Cuando llega a 90%, mostrar estado de procesamiento
+				// Fase 4: Finalizando (95-99%)
 				job.Progress += 1
-				job.Message = "Finalizing..."
+				job.Message = messages[3] // "Almost done..."
 				a.jobs.Store(jobID, job)
-				fmt.Printf("Progress: %d%% - %s\n", job.Progress, job.Message)
 				runtime.EventsEmit(a.ctx, "job:update", job)
+			} else {
+				// En 99%, solo actualizar cada 3 segundos
+				if time.Since(lastEventTime) > 3*time.Second {
+					job.Message = "Encoding... this may take a minute"
+					a.jobs.Store(jobID, job)
+					runtime.EventsEmit(a.ctx, "job:update", job)
+					lastEventTime = time.Now()
+				}
 			}
 		case err := <-downloadErr:
 			ticker.Stop()
@@ -183,9 +206,10 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 				}
 			}
 
-			// Success
+			// Success - saltar directamente a 100%
 			job.Status = "completed"
 			job.Progress = 100
+			job.Message = "Download complete!"
 			job.EndTime = time.Now()
 			a.jobs.Store(jobID, job)
 			runtime.EventsEmit(a.ctx, "job:update", job)
@@ -195,6 +219,7 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 				message = "Audio extracted successfully"
 			}
 
+			fmt.Printf("Total time: %v\n", job.EndTime.Sub(downloadStartTime))
 			return DownloadResponse{
 				Success: true,
 				Message: message,
@@ -232,12 +257,16 @@ func mapFormat(audioOnly bool, quality string) string {
 		return "bestaudio"
 	}
 
+	// Descargar directamente en MP4 cuando sea posible para evitar re-codificación lenta
 	switch quality {
 	case "4K":
-		return "bestvideo[height<=2160]+bestaudio/best[height<=2160]"
+		// Prioriza MP4 2160p, si no existe toma el mejor disponible
+		return "bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]"
 	case "1080p":
-		return "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
+		// Prioriza MP4 1080p
+		return "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]"
 	default:
-		return "best"
+		// Best: intenta MP4 primero, luego cualquier formato
+		return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
 	}
 }
