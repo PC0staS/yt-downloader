@@ -60,14 +60,22 @@ jobs:
               if: runner.os == 'Linux'
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+                  sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev gcc-aarch64-linux-gnu
 
             - name: Build frontend
               run: bun install && bun run build
               working-directory: frontend
 
-            - name: Build application (Linux)
-              if: runner.os == 'Linux'
+            - name: Build application (Linux x86_64)
+              if: runner.os == 'Linux' && matrix.goarch == 'amd64'
+              run: wails build -platform linux/${{ matrix.goarch }} -tags webkit2_41
+
+            - name: Build application (Linux ARM64)
+              if: runner.os == 'Linux' && matrix.goarch == 'arm64'
+              env:
+                  CC: aarch64-linux-gnu-gcc
+                  CXX: aarch64-linux-gnu-g++
+                  CGO_ENABLED: "1"
               run: wails build -platform linux/${{ matrix.goarch }} -tags webkit2_41
 
             - name: Build application (Windows)
