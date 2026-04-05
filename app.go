@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	osruntime "runtime"
 	"sync"
@@ -158,11 +159,21 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 	format := mapFormat(request.AudioOnly, request.Quality)
 	outputTemplate := filepath.Join(downloadDir, "%(title)s.%(ext)s")
 
+	// Detectar y configurar runtimes disponibles
 	cmd := ytdlp.New().
 		Format(format).
-		Output(outputTemplate).
-		JsRuntimes("bun").
-		JsRuntimes("node")
+		Output(outputTemplate)
+	
+	// Agregar runtimes disponibles
+	availableRuntimes := findAvailableRuntimes()
+	for _, runtime := range availableRuntimes {
+		cmd = cmd.JsRuntimes(runtime)
+	}
+	
+	// Si no hay runtimes, intentar con los nombre estándar como fallback
+	if len(availableRuntimes) == 0 {
+		cmd = cmd.JsRuntimes("bun").JsRuntimes("node")
+	}
 
 	if request.AudioOnly {
 		cmd = cmd.ExtractAudio().AudioFormat("wav").AudioQuality("192")
@@ -311,4 +322,58 @@ func mapFormat(audioOnly bool, quality string) string {
 		// Best: intenta MP4 primero, luego cualquier formato
 		return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
 	}
+}
+
+// findAvailableRuntimes detecta qué runtimes JS están disponibles en el sistema
+func findAvailableRuntimes() []string {
+	var runtimes []string
+	
+	// Lugares comunes donde buscar runtimes según SO
+	var searchPaths []string
+	if osruntime.GOOS == "darwin" {
+		searchPaths = []string{
+			"/opt/homebrew/bin/node",
+			"/usr/local/bin/node",
+			"/opt/homebrew/bin/bun",
+			"/Users/*/.bun/bin/bun", // Bun típicamente está en ~/.bun/bin
+			"/opt/homebrew/bin/deno",
+			"/usr/local/bin/deno",
+		}
+	} else if osruntime.GOOS == "windows" {
+		searchPaths = []string{
+			"C:\\Program Files\\nodejs\\node.exe",
+			"C:\\Program Files (x86)\\nodejs\\node.exe",
+			"C:\\Users\\*\\AppData\\Local\\bun\\bun.exe",
+			"C:\\ProgramData\\chocolatey\\bin\\node.exe",
+		}
+	} else { // Linux
+		searchPaths = []string{
+			"/usr/bin/node",
+			"/usr/local/bin/node",
+			"/usr/bin/bun",
+			"/usr/local/bin/bun",
+			"/usr/bin/deno",
+			"/usr/local/bin/deno",
+		}
+	}
+	
+	// Buscar cada runtime
+	for _, path := range searchPaths {
+		if _, err := os.Stat(path); err == nil {
+			// Archivo existe, extraer nombre del runtime
+			filename := filepath.Base(path)
+			runtimes = append(runtimes, filename)
+		}
+	}
+	
+	// Si no se encontraron, intentar buscar en PATH
+	if len(runtimes) == 0 {
+		for _, name := range []string{"node", "bun", "deno", "python3", "python"} {
+			if _, err := exec.LookPath(name); err == nil {
+				runtimes = append(runtimes, name)
+			}
+		}
+	}
+	
+	return runtimes
 }
