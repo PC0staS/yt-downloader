@@ -1,200 +1,239 @@
-# YouTube Downloader
+# YouTube Video Downloader
 
-A fast, lightweight desktop application for downloading YouTube videos with multiple quality options and audio extraction. Built with Wails (Go backend) and React frontend.
+A lightweight, cross-platform desktop application to download videos and audio from YouTube. Built with Go and React, featuring a modern GUI and real-time download tracking.
+
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Features
 
-- 🚀 **Fast Downloads** - Optimized format selection to avoid unnecessary re-encoding
-- 🎬 **Multiple Quality Options** - Choose between Best, 1080p, or 4K (2160p)
-- 🎵 **Audio Extraction** - Extract audio as MP3 in one click
-- 📊 **Real-time Progress** - Visual progress bar with meaningful status messages
-- 🎨 **Dark Theme** - Professional dark UI with turquoise accent colors
-- 💾 **Custom Save Location** - Choose where to save downloaded files
-- 🖥️ **Cross-Platform** - Works on Windows, macOS (Intel & Apple Silicon), and Linux
+✨ **Core Features:**
+
+- 🎬 Download YouTube videos in various quality options
+- 🎵 Extract audio-only (MP3) from videos
+- 📁 Choose custom download location
+- 🔄 Real-time download progress tracking
+- 🎨 Modern, intuitive graphical interface
+- ⚡ Fast and lightweight
+
+**Technical:**
+
+- Cross-platform support (Windows, macOS, Linux)
+- Built with Go backend and React frontend
+- Automatic yt-dlp installation on first run
+- Progress events with real-time updates
 
 ## System Requirements
 
-- **Windows:** Windows 10 or later
-- **macOS:** macOS 10.13 or later
-- **Linux:** GTK 3.0+ and WebKit2GTK 4.1+
+### Minimum Requirements
+
+- **OS:** Windows 10+, macOS 10.15+, or Linux (Ubuntu 20.04+)
+- **RAM:** 512 MB
+- **Disk Space:** 100 MB for the application + space for downloads
+- **Internet:** Required for downloading videos
+
+### Optional Dependencies
+
+- **FFmpeg:** Required for audio extraction (installed automatically by yt-dlp)
 
 ## Installation
 
-### Pre-built Binaries
+### Windows
 
-Download the latest release for your platform:
+1. Download the latest `youtube-downloader.exe` from [Releases](../../releases)
+2. Double-click the executable
+3. The app will launch automatically
+4. On first run, yt-dlp will be installed automatically
 
-- **Windows**: `youtube-downloader.exe`
-- **macOS (Apple Silicon)**: `youtube-downloader-arm64.zip`
-- **macOS (Intel)**: `youtube-downloader-amd64.zip`
-- **Linux (x86_64)**: `youtube-downloader`
-- **Linux (ARM64)**: `youtube-downloader-arm64`
+### macOS
 
-Releases are available at: [GitHub Releases](https://github.com/PC0staS/yt-downloader/releases)
+1. Download the latest `youtube-downloader-amd64.zip` (Intel) or `youtube-downloader-arm64.zip` (Apple Silicon)
+2. Extract the ZIP file
+3. Drag `youtube-downloader.app` to your Applications folder
+4. Launch from Applications or Spotlight
+5. You may need to allow the app in Security & Privacy settings (System Preferences)
 
-### Linux Users
+### Linux
 
-Install dependencies before running:
-
-**Ubuntu/Debian:**
-
-```bash
-sudo apt-get install libgtk-3-0 libwebkit2gtk-4.1-0
-```
-
-**Fedora:**
-
-```bash
-sudo dnf install gtk3 webkitgtk4.1
-```
-
-**Arch:**
-
-```bash
-sudo pacman -S gtk3 webkit2gtk
-```
+1. Download the latest `youtube-downloader` binary from [Releases](../../releases)
+2. Open a terminal and navigate to the downloaded file
+3. Make it executable:
+   ```bash
+   chmod +x youtube-downloader
+   ```
+4. Run the application:
+   ```bash
+   ./youtube-downloader
+   ```
+5. On first run, yt-dlp will be installed automatically
 
 ## Usage
 
-1. **Launch** the application
-2. **Paste** a YouTube URL in the URL field
-3. **Choose** quality (Best, 1080p, or 4K)
-4. **Optional:** Toggle "Audio Only (MP3)" to extract audio
-5. **Set** a custom save location or leave empty for app folder
-6. **Click** "Download" and wait for completion
+### Basic Download
 
-The app shows real-time progress with meaningful status messages:
+1. **Open the Application** - Launch the YouTube Video Downloader
+2. **Paste YouTube URL** - Paste or type a YouTube video URL in the input field
+3. **Choose Options:**
+   - **Audio Only** - Toggle to extract audio only (MP3 format)
+   - **Quality** - Select video quality (if downloading video, not audio)
+   - **Download Path** - Specify where to save (optional - defaults to home folder)
+4. **Download** - Click the "Download" button
+5. **Track Progress** - Watch real-time progress updates
 
-- **Downloading video...** - Fetching content from YouTube
-- **Encoding to MP4...** - Converting to MP4 (if needed)
-- **Processing...** - Finalizing the download
+### Tips
 
-## Building from Source
+- **Valid URLs:** Both `youtube.com` and `youtu.be` formats are supported
+- **Quality Options:** Higher quality requires more download time and disk space
+- **Audio-Only:** Automatically uses best available audio quality
+- **Default Location:** If no path is specified, videos save to `~/Downloads/YouTubeDownloads` or next to the executable
+
+## Build from Source
 
 ### Prerequisites
 
-- **Go** 1.21 or later
-- **Node.js** 18+ with Bun
-- **Wails CLI** v2.12.0
+- **Go** 1.21 or higher
+- **Node.js** 18+ and **npm** or **bun**
+- **Wails** CLI
+- Platform-specific build tools:
+  - **Windows:** MSVC or MinGW
+  - **macOS:** Xcode Command Line Tools
+  - **Linux:** `libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, build-essential
 
-On Linux, also install:
+### Setup
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone https://github.com/PC0staS/yt-downloader.git
+   cd yt-downloader
+   ```
+
+2. **Install Wails:**
+
+   ```bash
+   go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+   ```
+
+3. **Install dependencies:**
+
+   ```bash
+   go mod download
+   cd frontend && npm install && cd ..
+   ```
+
+   (or use `bun install` instead of `npm install`)
+
+4. **Build the application:**
+
+   ```bash
+   wails build
+   ```
+
+   The compiled binary will be in `build/bin/`
+
+5. **Development mode (with hot reload):**
+   ```bash
+   wails dev
+   ```
+
+### Build for Specific Platforms
 
 ```bash
-sudo apt-get install libgtk-3-dev libwebkit2gtk-4.1-dev
-```
-
-### Build Steps
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/PC0staS/yt-downloader.git
-cd yt-downloader
-```
-
-2. Install Wails:
-
-```bash
-go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
-```
-
-3. Build frontend dependencies:
-
-```bash
-cd frontend
-bun install
-bun run build
-cd ..
-```
-
-4. Build the application:
-
-**For your current platform:**
-
-```bash
-wails build
-```
-
-**For specific platforms:**
-
-```bash
-# Linux
-wails build -platform linux/amd64
-wails build -platform linux/arm64
-
-# macOS
-wails build -platform darwin/arm64    # Apple Silicon
-wails build -platform darwin/amd64    # Intel
-
 # Windows
 wails build -platform windows/amd64
+
+# macOS arm64 (Apple Silicon)
+wails build -platform darwin/arm64
+
+# macOS amd64 (Intel)
+wails build -platform darwin/amd64
+
+# Linux amd64
+wails build -platform linux/amd64
 ```
 
-The built application will be in the `build/bin/` directory.
+## Troubleshooting
+
+### "yt-dlp not found" Error
+
+- The app will attempt to install yt-dlp automatically on first run
+- If installation fails, ensure you have internet connectivity
+- On Linux, you may need to install FFmpeg: `sudo apt-get install ffmpeg`
+
+### Download Fails with Invalid URL
+
+- Ensure you're using a valid YouTube URL
+- Try pasting the full URL: `https://www.youtube.com/watch?v=VIDEO_ID`
+
+### Permission Denied (Linux)
+
+- Make sure the file is executable: `chmod +x youtube-downloader`
+
+### macOS Security Warning
+
+- Right-click the app and select "Open" to bypass Gatekeeper on first run
+- Or add exception in System Preferences → Security & Privacy
+
+## Project Structure
+
+```
+├── main.go          # Application entry point
+├── app.go           # Backend logic and yt-dlp integration
+├── go.mod           # Go dependencies
+├── frontend/        # React UI
+│   ├── src/
+│   │   ├── App.jsx  # Main React component
+│   │   └── style.css
+│   ├── package.json
+│   └── vite.config.js
+└── build/           # Build output (generated)
+```
+
+## Technology Stack
+
+- **Backend:** Go 1.21
+- **Frontend:** React 18 + Vite
+- **GUI Framework:** Wails v2
+- **Video Download:** yt-dlp (go-ytdlp wrapper)
+- **Styling:** Tailwind CSS
 
 ## Development
 
-To run in development mode with hot-reload:
+### Making Changes
+
+1. **Backend changes:** Edit `app.go` or `main.go`, changes reload automatically in dev mode
+2. **Frontend changes:** Edit files in `frontend/src/`, Vite provides hot module replacement
+3. **Rebuild:** Run `wails build` for production binary
+
+### Debugging
+
+Run in development mode:
 
 ```bash
 wails dev
 ```
 
-This starts a development server with the app window and live reloading.
-
-## Architecture
-
-- **Backend:** Go with Wails framework
-- **Frontend:** React 18 with Tailwind CSS
-- **Downloader:** go-ytdlp (yt-dlp wrapper)
-- **IPC:** Wails events for real-time updates
-
-The backend handles all download logic and emits progress events to the frontend, which updates the UI in real-time.
-
-## Performance Optimizations
-
-- **Direct MP4 Downloads** - Selects MP4 format when available to avoid re-encoding
-- **Smart Progress Simulation** - Realistic progress based on download phases
-- **Async Operations** - Non-blocking goroutines for UI responsiveness
-- **Smart Format Selection** - Prioritizes high-quality native formats
-
-## Troubleshooting
-
-### "Video not found"
-
-- Verify the URL is a valid YouTube link
-- Check if the video is public and available in your region
-
-### Slow encoding
-
-- This is normal for video conversion (MP4 re-encoding can be slow)
-- The progress reaches 60-95% quickly for downloads, then slows for encoding
-- Audio-only downloads are much faster
-
-### Linux dependencies not found
-
-- Ensure you've installed all required GTK and WebKit libraries (see Installation section)
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Credits
-
-- Built with [Wails](https://wails.io/)
-- Uses [yt-dlp](https://github.com/yt-dlp/yt-dlp)
-- Go wrapper: [go-ytdlp](https://github.com/lrstanley/go-ytdlp)
+This starts both the frontend dev server and Go backend with debugging capabilities.
 
 ## Contributing
 
-Contributions are welcome! Feel free to:
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-- Report bugs
-- Suggest features
-- Submit pull requests
+## License
 
-For questions or support, visit the [GitHub Issues](https://github.com/PC0staS/yt-downloader/issues) page.
+This project is licensed under the MIT License - see LICENSE file for details.
+
+## Acknowledgments
+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) - The video downloader engine
+- [Wails](https://wails.io) - Go desktop application framework
+- [React](https://reactjs.org) - UI library
+- [Tailwind CSS](https://tailwindcss.com) - Styling framework
+
+## Support
+
+If you encounter any issues or have feature requests, please open an [Issue](../../issues) on GitHub.
 
 ---
 
-Made by [Pablo Costas](https://github.com/PC0staS) | [pablocostas.dev](https://pablocostas.dev)
+**Made with ❤️ by [PC0staS](https://github.com/PC0staS)**

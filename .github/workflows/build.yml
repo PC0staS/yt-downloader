@@ -18,10 +18,6 @@ jobs:
             goos: linux
             goarch: amd64
             output: youtube-downloader
-          - os: ubuntu-latest
-            goos: linux
-            goarch: arm64
-            output: youtube-downloader-arm64
           - os: windows-latest
             goos: windows
             goarch: amd64
@@ -59,26 +55,15 @@ jobs:
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
-          sudo dpkg --add-architecture arm64
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-          sudo apt-get install -y libwebkit2gtk-4.1-dev:arm64 libgtk-3-dev:arm64 || true
 
       - name: Build frontend
         run: bun install && bun run build
         working-directory: frontend
 
-      - name: Build application (Linux x86_64)
-        if: runner.os == 'Linux' && matrix.goarch == 'amd64'
-        run: wails build -platform linux/${{ matrix.goarch }} -tags webkit2_41
-
-      - name: Build application (Linux ARM64)
-        if: runner.os == 'Linux' && matrix.goarch == 'arm64'
-        env:
-          CGO_ENABLED: "1"
-          CC: aarch64-linux-gnu-gcc
-          CXX: aarch64-linux-gnu-g++
-          AR: aarch64-linux-gnu-ar
+      - name: Build application (Linux)
+        if: runner.os == 'Linux'
         run: wails build -platform linux/${{ matrix.goarch }} -tags webkit2_41
 
       - name: Build application (Windows)
@@ -93,33 +78,14 @@ jobs:
         if: runner.os == 'macOS' && matrix.goarch == 'arm64'
         run: |
           cd build/bin
-          zip -r youtube-downloader-darwin-arm64.zip youtube-downloader.app
+          zip -r youtube-downloader-arm64.zip youtube-downloader.app
           cd ../..
 
       - name: Compress macOS app (amd64)
         if: runner.os == 'macOS' && matrix.goarch == 'amd64'
         run: |
           cd build/bin
-          zip -r youtube-downloader-darwin-amd64.zip youtube-downloader.app
-          cd ../..
-
-      - name: Rename Linux binaries
-        if: runner.os == 'Linux'
-        run: |
-          cd build/bin
-          if [ -f youtube-downloader-arm64 ]; then
-            mv youtube-downloader-arm64 youtube-downloader-linux-arm64
-          fi
-          if [ -f youtube-downloader ]; then
-            mv youtube-downloader youtube-downloader-linux-amd64
-          fi
-          cd ../..
-
-      - name: Rename Windows binary
-        if: runner.os == 'Windows'
-        run: |
-          cd build/bin
-          ren youtube-downloader.exe youtube-downloader-windows-amd64.exe
+          zip -r youtube-downloader-amd64.zip youtube-downloader.app
           cd ../..
 
       - name: Upload artifact
@@ -143,8 +109,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            windows-amd64/youtube-downloader-windows-amd64.exe
-            linux-amd64/youtube-downloader-linux-amd64
-            linux-arm64/youtube-downloader-linux-arm64
-            darwin-arm64/youtube-downloader-darwin-arm64.zip
-            darwin-amd64/youtube-downloader-darwin-amd64.zip
+            windows-amd64/youtube-downloader.exe
+            linux-amd64/youtube-downloader
+            darwin-arm64/youtube-downloader-arm64.zip
+            darwin-amd64/youtube-downloader-amd64.zip
