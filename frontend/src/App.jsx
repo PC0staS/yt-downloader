@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { YoutubeDownload } from "../wailsjs/go/main/App";
+import { YoutubeDownload, SaveDownloadedFile } from "../wailsjs/go/main/App";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 import { BrowserOpenURL } from "../wailsjs/runtime/runtime";
+import { SaveFileDialog } from "../wailsjs/runtime/runtime";
 
 export default function App() {
   const [url, setUrl] = useState("");
@@ -12,6 +13,7 @@ export default function App() {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
   const [job, setJob] = useState(null);
+  const [downloadedFile, setDownloadedFile] = useState(null); // Archivo temporal descargado
 
   // Escuchar eventos de progreso en tiempo real
   useEffect(() => {
@@ -30,10 +32,10 @@ export default function App() {
 
     if (job.status === "completed") {
       setLoading(false);
-      setStatus("success");
-      setUrl("");
-      setAudioOnly(false);
-      setQuality("best");
+      // Guardar el archivo temporal descargado para después permitir guardarlo
+      setDownloadedFile(job.tempPath);
+      setStatus("save-location"); // Nuevo estado para solicitar ubicación de guardado
+      setError(null);
     } else if (job.status === "error") {
       setLoading(false);
       setStatus("error");
@@ -97,17 +99,54 @@ export default function App() {
     }
   };
 
+  const handleSaveFile = async () => {
+    if (!downloadedFile) return;
+
+    try {
+      // Usar SaveFileDialog para que el usuario elija dónde guardar
+      const filename = downloadedFile.split("/").pop();
+      const savePath = await SaveFileDialog({
+        defaultFilename: filename,
+        title: "Save downloaded video",
+        filters: [
+          { displayName: "All Files", pattern: "*" },
+        ],
+      });
+
+      if (!savePath) {
+        // Usuario canceló
+        return;
+      }
+
+      // Llamar Go para mover el archivo
+      const result = await SaveDownloadedFile(downloadedFile, savePath);
+      
+      if (result.success) {
+        setStatus("success");
+        setError(null);
+        setDownloadedFile(null);
+        setUrl("");
+        setAudioOnly(false);
+        setQuality("best");
+      } else {
+        setError(result.error || "Failed to save file");
+        setStatus("error");
+      }
+    } catch (err) {
+      setError(err.message || "Failed to save file");
+      setStatus("error");
+    }
+  };
+
   return (
     <div className="min-h-screen text-[#e8edf5]">
       <div className="pointer-events-none fixed inset-0 -z-10 opacity-40">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(147,164,187,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(147,164,187,0.06)_1px,transparent_1px)] bg-size-[36px_36px]" />
       </div>
 
-      <div className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
-        <div
-          className="w-full max-w-2xl"
-          style={{ animation: "riseIn 420ms ease-out both" }}
-        >
+      <div className="flex h-screen flex-col overflow-hidden px-4 py-8 sm:px-6">
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-2xl" style={{ animation: "riseIn 420ms ease-out both" }}>
           {/* Header */}
           <div className="mb-7 flex items-center justify-between rounded-2xl border border-[#243446] bg-[#101720]/80 px-4 py-3 backdrop-blur-sm">
             <span className="inline-flex items-center rounded-full border border-[#243446] bg-[#131b26] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#93a4bb]">
@@ -308,6 +347,20 @@ export default function App() {
               </div>
             )}
 
+            {status === "save-location" && (
+              <div className="mb-6 rounded-xl border border-[#4a5f7f] bg-[#1a2332] p-4">
+                <p className="mb-4 text-sm text-[#a8c5e0]">
+                  <span className="font-medium">Video downloaded to temporary location.</span>
+                </p>
+                <button
+                  onClick={handleSaveFile}
+                  className="w-full rounded-lg bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] px-6 py-2 text-sm font-medium text-white transition-all hover:shadow-lg hover:from-[#4f46e5] hover:to-[#7c3aed] active:scale-95"
+                >
+                  Choose Save Location
+                </button>
+              </div>
+            )}
+
             {status === "success" && (
               <div className="mb-6 rounded-xl border border-[#2e5d4d] bg-[#162a24] p-4">
                 <p className="flex items-center gap-2 text-sm text-[#89e2be]">
@@ -322,7 +375,7 @@ export default function App() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  <span className="font-medium">Downloaded successfully</span>
+                  <span className="font-medium">Saved successfully</span>
                 </p>
               </div>
             )}
@@ -406,6 +459,7 @@ export default function App() {
             >
               pablocostas.dev
             </button>
+          </div>
           </div>
         </div>
       </div>

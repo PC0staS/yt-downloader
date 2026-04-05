@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	osruntime "runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -29,10 +28,16 @@ type DownloadRequest struct {
 }
 
 type DownloadResponse struct {
-	Success  bool   `json:"success"`
-	Message  string `json:"message"`
-	Filename string `json:"filename,omitempty"`
-	Error    string `json:"error,omitempty"`
+	Success    bool   `json:"success"`
+	Message    string `json:"message"`
+	Filename   string `json:"filename,omitempty"`
+	TempPath   string `json:"tempPath,omitempty"`   // Ruta del archivo en temporales
+	Error      string `json:"error,omitempty"`
+}
+
+type SaveFileRequest struct {
+	TempPath   string `json:"tempPath"`     // Ruta del archivo temporal
+	SavePath   string `json:"savePath"`     // Dónde guardarlo
 }
 
 type Job struct {
@@ -76,75 +81,11 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 	// Ensure yt-dlp is installed
 	ytdlp.MustInstall(ctxBackground, nil)
 
-	// Get and validate download directory with strict checks
-	downloadDir := request.DownloadPath
-	if downloadDir == "" {
-		// Try to use current working directory first
-		cwd, err := os.Getwd()
-		
-		// Validar que cwd sea seguro y escribible
-		if err == nil && cwd != "/" && cwd != "" && !isSuspiciousPath(cwd) && isWritableDirectory(cwd) {
-			downloadDir = cwd
-			fmt.Printf("Using cwd as download directory: %s\n", downloadDir)
-		} else {
-			// Fallback to Downloads folder - ALWAYS safe fallback
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				job.Status = "error"
-				job.Error = fmt.Sprintf("Failed to determine download directory: %v", err)
-				a.jobs.Store(jobID, job)
-				runtime.EventsEmit(a.ctx, "job:update", job)
-				return DownloadResponse{
-					Success: false,
-					Error:   job.Error,
-				}
-			}
-			downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
-			fmt.Printf("Using Downloads fallback: %s\n", downloadDir)
-		}
-	}
-
-	// Ensure directory exists and is writable - with multiple validation layers
-	if err := os.MkdirAll(downloadDir, 0755); err != nil {
-		fmt.Printf("Failed to create %s: %v, trying fallback\n", downloadDir, err)
-		// If the directory creation fails, try Downloads as fallback
-		homeDir, homeErr := os.UserHomeDir()
-		if homeErr != nil {
-			job.Status = "error"
-			job.Error = fmt.Sprintf("Failed to determine home directory: %v", homeErr)
-			a.jobs.Store(jobID, job)
-			runtime.EventsEmit(a.ctx, "job:update", job)
-			return DownloadResponse{
-				Success: false,
-				Error:   job.Error,
-			}
-		}
-		
-		downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
-		if err := os.MkdirAll(downloadDir, 0755); err != nil {
-			job.Status = "error"
-			job.Error = fmt.Sprintf("Failed to create downloads directory: %v", err)
-			a.jobs.Store(jobID, job)
-			runtime.EventsEmit(a.ctx, "job:update", job)
-			return DownloadResponse{
-				Success: false,
-				Error:   job.Error,
-			}
-		}
-	}
-	
-	// CRITICAL: Verify the directory is NOT "/" and is actually writable before proceeding
-	if downloadDir == "/" || isSuspiciousPath(downloadDir) {
-		homeDir, _ := os.UserHomeDir()
-		downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
-		os.MkdirAll(downloadDir, 0755)
-		fmt.Printf("Suspicious path detected, using safe fallback: %s\n", downloadDir)
-	}
-	
-	// Final writable check - do not proceed if not writable
-	if !isWritableDirectory(downloadDir) {
+	// ALWAYS download to temp directory - user will choose save location
+	tempDir := filepath.Join(os.TempDir(), "youtube-downloader")
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		job.Status = "error"
-		job.Error = fmt.Sprintf("Download directory is not writable: %s", downloadDir)
+		job.Error = fmt.Sprintf("Failed to create temp directory: %v", err)
 		a.jobs.Store(jobID, job)
 		runtime.EventsEmit(a.ctx, "job:update", job)
 		return DownloadResponse{
@@ -153,7 +94,8 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 		}
 	}
 	
-	fmt.Printf("Final download directory: %s\n", downloadDir)
+	downloadDir := tempDir
+	fmt.Printf("Downloading to temp directory: %s\n", downloadDir)
 
 	// Actualizar status a downloading
 
@@ -290,14 +232,79 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 			}
 
 			fmt.Printf("Total time: %v\n", job.EndTime.Sub(downloadStartTime))
+			
+			// Get the downloaded file name
+			files, err := os.ReadDir(downloadDir)
+			var filename string
+			if err == nil && len(files) > 0 {
+				filename = files[0].Name()
+			}
+			
+			tempFilePath := filepath.Join(downloadDir, filename)
 			return DownloadResponse{
-				Success: true,
-				Message: message,
+				Success:  true,
+				Message:  message,
+				Filename: filename,
+				TempPath: tempFilePath,
 			}
 		}
 	}
 }
 
+
+// SaveDownloadedFile mueve un archivo desde temp a la ubicación elegida
+func (a *App) SaveDownloadedFile(tempPath string, savePath string) DownloadResponse {
+	if tempPath == "" || savePath == "" {
+		return DownloadResponse{
+			Success: false,
+			Error:   "Invalid temp or save path",
+		}
+	}
+	
+	// Validar que exista el archivo temporal
+	if _, err := os.Stat(tempPath); err != nil {
+		return DownloadResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Temp file not found: %v", err),
+		}
+	}
+	
+	// Si savePath es un directorio, agregar el nombre del archivo
+	fileInfo, _ := os.Stat(savePath)
+	if fileInfo != nil && fileInfo.IsDir() {
+		filename := filepath.Base(tempPath)
+		savePath = filepath.Join(savePath, filename)
+	}
+	
+	// Mover el archivo
+	if err := os.Rename(tempPath, savePath); err != nil {
+		// Si Rename falla (como en macOS entre diferentes volúmenes), copiar y eliminar
+		content, readErr := os.ReadFile(tempPath)
+		if readErr != nil {
+			return DownloadResponse{
+				Success: false,
+				Error:   fmt.Sprintf("Failed to read temp file: %v", readErr),
+			}
+		}
+		
+		writeErr := os.WriteFile(savePath, content, 0644)
+		if writeErr != nil {
+			return DownloadResponse{
+				Success: false,
+				Error:   fmt.Sprintf("Failed to write file to save location: %v", writeErr),
+			}
+		}
+		
+		// Eliminar archivo temporal
+		os.Remove(tempPath)
+	}
+	
+	return DownloadResponse{
+		Success:  true,
+		Message:  "File saved successfully",
+		Filename: filepath.Base(savePath),
+	}
+}
 
 // GetJobs retorna todos los jobs
 func (a *App) GetJobs() []Job {
@@ -340,41 +347,4 @@ func mapFormat(audioOnly bool, quality string) string {
 		// Best: intenta MP4 primero, luego cualquier formato
 		return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
 	}
-}
-
-// isSuspiciousPath detecta si un path es potencialmente peligroso
-func isSuspiciousPath(path string) bool {
-	// Check for system directories
-	suspiciousPaths := []string{"/", "/var", "/tmp", "/etc", "/sys", "/proc", "/dev", "/root", "/bin", "/sbin", "/usr"}
-	
-	for _, susPath := range suspiciousPaths {
-		if path == susPath {
-			return true
-		}
-	}
-	
-	// Check if path is AppTranslocation (macOS sandbox)
-	if osruntime.GOOS == "darwin" && (strings.Contains(path, "AppTranslocation") || strings.Contains(path, "private/var")) {
-		return true
-	}
-	
-	return false
-}
-
-// isWritableDirectory verifica si un directorio es realmente escribible
-func isWritableDirectory(path string) bool {
-	// Crear directorio si no existe
-	if err := os.MkdirAll(path, 0755); err != nil {
-		return false
-	}
-	
-	// Prueba de escritura: crear un archivo temporal
-	testFile := filepath.Join(path, ".write-test-"+fmt.Sprintf("%d", time.Now().UnixNano()))
-	err := os.WriteFile(testFile, []byte("test"), 0644)
-	defer func() {
-		// Limpiar el archivo de prueba
-		os.Remove(testFile)
-	}()
-	
-	return err == nil
 }
