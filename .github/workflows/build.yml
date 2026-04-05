@@ -66,26 +66,41 @@ jobs:
         if: runner.os == 'Linux'
         run: wails build -platform linux/${{ matrix.goarch }} -tags webkit2_41
 
+      - name: Rename Linux binary
+        if: runner.os == 'Linux'
+        run: |
+          mv build/bin/youtube-downloader build/bin/youtube-downloader-linux
+
       - name: Build application (Windows)
         if: runner.os == 'Windows'
         run: wails build -platform windows/amd64 -tags webkit2_41
+
+      - name: Rename Windows binary
+        if: runner.os == 'Windows'
+        run: |
+          move build\bin\youtube-downloader.exe build\bin\youtube-downloader-windows.exe
 
       - name: Build application (macOS)
         if: runner.os == 'macOS'
         run: wails build -platform darwin/${{ matrix.goarch }} -tags webkit2_41
 
+      - name: Rename macOS binary
+        if: runner.os == 'macOS'
+        run: |
+          mv build/bin/youtube-downloader build/bin/youtube-downloader-darwin-${{ matrix.goarch }}
+
       - name: Compress macOS app (arm64)
         if: runner.os == 'macOS' && matrix.goarch == 'arm64'
         run: |
           cd build/bin
-          zip -r youtube-downloader-arm64.zip youtube-downloader.app
+          zip -r youtube-downloader-darwin-arm64.zip youtube-downloader.app
           cd ../..
 
       - name: Compress macOS app (amd64)
         if: runner.os == 'macOS' && matrix.goarch == 'amd64'
         run: |
           cd build/bin
-          zip -r youtube-downloader-amd64.zip youtube-downloader.app
+          zip -r youtube-downloader-darwin-amd64.zip youtube-downloader.app
           cd ../..
 
       - name: Upload artifact
@@ -93,9 +108,7 @@ jobs:
         with:
           name: ${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
-            build/bin/youtube-downloader
             build/bin/youtube-downloader-*
-            build/bin/youtube-downloader.exe
             build/bin/*.zip
   release:
     needs: build
