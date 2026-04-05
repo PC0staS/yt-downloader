@@ -69,7 +69,10 @@ jobs:
       - name: Rename Linux binary
         if: runner.os == 'Linux'
         run: |
-          mv build/bin/youtube-downloader build/bin/youtube-downloader-linux
+          ls -la build/bin/
+          if [ -f build/bin/youtube-downloader ]; then
+            mv build/bin/youtube-downloader build/bin/youtube-downloader-linux
+          fi
 
       - name: Build application (Windows)
         if: runner.os == 'Windows'
@@ -77,17 +80,16 @@ jobs:
 
       - name: Rename Windows binary
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          move build\bin\youtube-downloader.exe build\bin\youtube-downloader-windows.exe
+          Get-ChildItem build\bin\ -Force
+          if (Test-Path build\bin\youtube-downloader.exe) {
+            Move-Item -Path build\bin\youtube-downloader.exe -Destination build\bin\youtube-downloader-windows.exe
+          }
 
       - name: Build application (macOS)
         if: runner.os == 'macOS'
         run: wails build -platform darwin/${{ matrix.goarch }} -tags webkit2_41
-
-      - name: Rename macOS binary
-        if: runner.os == 'macOS'
-        run: |
-          mv build/bin/youtube-downloader build/bin/youtube-downloader-darwin-${{ matrix.goarch }}
 
       - name: Compress macOS app (arm64)
         if: runner.os == 'macOS' && matrix.goarch == 'arm64'
