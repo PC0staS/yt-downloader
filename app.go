@@ -77,8 +77,12 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 	// Get download directory
 	downloadDir := request.DownloadPath
 	if downloadDir == "" {
-		exePath, err := os.Executable()
-		if err != nil {
+		// Try to use current working directory first
+		cwd, err := os.Getwd()
+		if err == nil {
+			downloadDir = cwd
+		} else {
+			// Fallback to Downloads folder
 			homeDir, err := os.UserHomeDir()
 			if err != nil {
 				job.Status = "error"
@@ -91,20 +95,34 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 				}
 			}
 			downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
-		} else {
-			downloadDir = filepath.Dir(exePath)
 		}
 	}
 
-	// Ensure directory exists
+	// Ensure directory exists - with fallback if write-protected
 	if err := os.MkdirAll(downloadDir, 0755); err != nil {
-		job.Status = "error"
-		job.Error = fmt.Sprintf("Failed to create downloads directory: %v", err)
-		a.jobs.Store(jobID, job)
-		runtime.EventsEmit(a.ctx, "job:update", job)
-		return DownloadResponse{
-			Success: false,
-			Error:   job.Error,
+		// If the directory is read-only, try Downloads as fallback
+		homeDir, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			job.Status = "error"
+			job.Error = fmt.Sprintf("Failed to create downloads directory: %v", err)
+			a.jobs.Store(jobID, job)
+			runtime.EventsEmit(a.ctx, "job:update", job)
+			return DownloadResponse{
+				Success: false,
+				Error:   job.Error,
+			}
+		}
+		
+		downloadDir = filepath.Join(homeDir, "Downloads", "YouTubeDownloads")
+		if err := os.MkdirAll(downloadDir, 0755); err != nil {
+			job.Status = "error"
+			job.Error = fmt.Sprintf("Failed to create downloads directory: %v", err)
+			a.jobs.Store(jobID, job)
+			runtime.EventsEmit(a.ctx, "job:update", job)
+			return DownloadResponse{
+				Success: false,
+				Error:   job.Error,
+			}
 		}
 	}
 
@@ -126,7 +144,10 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 
 	cmd := ytdlp.New().
 		Format(format).
-		Output(outputTemplate)
+		Output(outputTemplate).
+		JsRuntimes("bun").
+		JsRuntimes("node").
+		JsRuntimes("deno")
 
 	if request.AudioOnly {
 		cmd = cmd.ExtractAudio().AudioFormat("wav").AudioQuality("192")
