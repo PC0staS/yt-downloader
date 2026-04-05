@@ -114,7 +114,7 @@ export default function App() {
               Download Console
             </span>
             <span className="text-xs font-medium text-[#f4b45f]">
-              MP4 / MP3
+              MP4 / WAV
             </span>
           </div>
 
@@ -183,7 +183,7 @@ export default function App() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-[#e8edf5]">
-                      Audio Only (MP3)
+                      Audio Only (WAV)
                     </p>
                     <p className="mt-0.5 text-xs text-[#93a4bb]">
                       Extract audio only
@@ -373,7 +373,7 @@ export default function App() {
             {/* Info Footer */}
             <p className="mt-4 text-center text-xs text-[#93a4bb]">
               {audioOnly
-                ? "Audio will be saved as MP3"
+                ? "Audio will be saved as WAV"
                 : "Video will be saved as MP4"}
               {downloadPath && ` to ${downloadPath}`}
             </p>

@@ -129,7 +129,7 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 		Output(outputTemplate)
 
 	if request.AudioOnly {
-		cmd = cmd.ExtractAudio().AudioFormat("mp3").AudioQuality("192")
+		cmd = cmd.ExtractAudio().AudioFormat("wav").AudioQuality("192")
 	}
 	// Ya no re-codificamos porque ahora el formato prioriza MP4 nativo
 
@@ -147,7 +147,7 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 	messages := []string{
 		"Downloading video...",
 		"Fetching metadata...",
-		"Encoding to MP4...",
+		"Encoding...",
 		"Almost done...",
 	}
 	lastEventTime := time.Now()
@@ -180,7 +180,7 @@ func (a *App) YoutubeDownload(request DownloadRequest) DownloadResponse {
 				if job.Progress > 95 {
 					job.Progress = 95
 				}
-				job.Message = messages[2] // "Encoding to MP4..."
+				job.Message = messages[2] // "Encoding..."
 				a.jobs.Store(jobID, job)
 				runtime.EventsEmit(a.ctx, "job:update", job)
 			} else if job.Progress < 99 {
